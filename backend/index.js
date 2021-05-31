@@ -1,4 +1,3 @@
-require('dotenv').config()
 const app = require('./app/app')
 const sequelize = require('./db')
 const models = require('./models/models')

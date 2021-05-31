@@ -5,12 +5,12 @@ class BrandController {
     async create(req, res) {
         const { name } = req.body
         const brand = await Brand.create({ name })
-        return res.send(brand)
+        return res.send({ brand })
     }
 
     async getAll(req, res) {
         const brands = await Brand.findAll()
-        return res.send(brands)
+        return res.send({ brands })
     }
 }
 

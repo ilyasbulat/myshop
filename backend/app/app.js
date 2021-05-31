@@ -1,8 +1,10 @@
+require('dotenv').config()
+
 const express = require('express')
 const cors = require('cors')
 const fileUpload = require('express-fileupload')
-const router = require('./routes/index')
-const errorHandler = require('./middleware/errorHandlerMiddleware')
+const router = require('../routes/index')
+const errorHandler = require('../middleware/errorHandlerMiddleware')
 
 const app = express()
 

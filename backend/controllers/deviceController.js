@@ -2,14 +2,13 @@ const uuid = require('uuid')
 const path = require('path')
 const { Device, DeviceInfo } = require('../models/models')
 const ApiError = require('../error/ApiError')
-const { type } = require('os')
 
 class DeviceController {
     async create(req, res, next) {
         try {
             const { name, price, brandId, typeId, info } = req.body
             const { img } = req.files
-            let filename = uuid.v4() + 'jpg'
+            let filename = uuid.v4() + '.jpg'
             img.mv(path.resolve(__dirname, '..', 'static', filename))
 
             const device = Device.create({
@@ -31,9 +30,10 @@ class DeviceController {
                 )
             }
 
-            return res.send(device)
+            return res.send({ device })
         } catch (error) {
-            next(ApiError.badRequest(error.message))
+            console.log('ERRROR: ', error)
+            return next(ApiError.badRequest(error.message))
         }
     }
     async getAll(req, res) {
@@ -71,8 +71,11 @@ class DeviceController {
         }
         return res.send(devices)
     }
-    async getOne(req, res) {
+    async getOne(req, res, next) {
         const { id } = req.params
+        if (!id) {
+            return next(ApiErro.badRequest('no param id'))
+        }
         const device = Device.findOne({
             where: { id },
             include: { model: DeviceInfo, as: 'info' },
