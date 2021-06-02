@@ -32,7 +32,6 @@ class DeviceController {
 
             return res.send({ device })
         } catch (error) {
-            console.log('ERRROR: ', error)
             return next(ApiError.badRequest(error.message))
         }
     }
@@ -69,7 +68,7 @@ class DeviceController {
                 offset,
             })
         }
-        return res.send(devices)
+        return res.send({ devices })
     }
     async getOne(req, res, next) {
         const { id } = req.params

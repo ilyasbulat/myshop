@@ -1,181 +1,229 @@
-const request = require('supertest')
-const path = require('path')
-const fs = require('fs')
-const app = require('../app/app')
-const truncate = require('../test-utils/truncate')
-const clearStatic = require('../test-utils/file-delete')
+require('dotenv').config()
 
-describe('/api/user/signup endpoint tests', () => {
-    afterAll(async () => {
-        await truncate()
+const bcrypt = require('bcrypt')
+const ApiError = require('../error/ApiError')
+const { User, Type, Device, Brand } = require('../models/models')
+
+jest.mock('bcrypt')
+jest.mock('../error/ApiError')
+jest.mock('../models/models')
+
+const userController = require('../controllers/userController')
+const typeController = require('../controllers/typeController')
+const deviceController = require('../controllers/deviceController')
+const brandController = require('../controllers/brandController')
+
+const res = {
+    send: jest.fn(),
+}
+
+const next = jest.fn()
+
+describe('user controller login', () => {
+    beforeEach(() => {
+        jest.clearAllMocks()
     })
-    it('correct username should return 200 status code', async () => {
-        const res = await request(app).post('/api/user/signup').send({
-            email: 'test22@test.com',
-            password: 'password',
-        })
-        expect(res.statusCode).toEqual(200)
-        expect(res.body).toHaveProperty('token')
+    const email = 'joe@test.com'
+    const password = 'test123'
+    const role = 'USER'
+
+    it('when user with this credentials exists', async () => {
+        User.findOne.mockResolvedValue({ email, password, role })
+        bcrypt.compareSync.mockReturnValue(true)
+
+        await userController.login({ body: { email, password } }, res, next)
+        expect(res.send).toHaveBeenCalled()
+        expect(ApiError.badRequest).not.toHaveBeenCalled()
     })
-    it('already exists email should return 400 status code', async () => {
-        const res = await request(app).post('/api/user/signup').send({
-            email: 'test22@test.com',
-            password: 'password',
-        })
-        expect(res.statusCode).toEqual(400)
+
+    it('when user not exists', async () => {
+        User.findOne.mockResolvedValue(null)
+
+        await userController.login({ body: { email, password } }, res, next)
+        expect(res.send).not.toHaveBeenCalled()
+        expect(next).toHaveBeenCalled()
+        expect(ApiError.badRequest).toHaveBeenCalledWith(
+            'user with this email not found'
+        )
     })
-    it('empty email property should return 400 status code', async () => {
-        const res = await request(app).post('/api/user/signup').send({
-            email: '',
-            password: 'password',
-        })
-        expect(res.statusCode).toEqual(400)
+    // ...
+})
+
+describe('user controller registration', () => {
+    beforeEach(() => {
+        jest.clearAllMocks()
     })
-    it('empty password property should return 400 status code', async () => {
-        const res = await request(app).post('/api/user/signup').send({
-            email: 'test@test.com',
-            password: '',
-        })
-        expect(res.statusCode).toEqual(400)
+    const id = 1
+    const email = 'joe@test.com'
+    const password = 'test123'
+    const role = 'USER'
+
+    it('reg new user with proper credentials', async () => {
+        User.findOne.mockResolvedValue(null)
+        User.create.mockResolvedValue({ id, email, password, role })
+        await userController.registration(
+            { body: { email, password } },
+            res,
+            next
+        )
+        expect(res.send).toHaveBeenCalled()
+        expect(ApiError.badRequest).not.toHaveBeenCalled()
+    })
+
+    it('reg new user with already used creds', async () => {
+        User.findOne.mockResolvedValue({ email, password })
+        await userController.registration(
+            { body: { email, password } },
+            res,
+            next
+        )
+
+        expect(res.send).not.toHaveBeenCalled()
+        expect(ApiError.badRequest).toHaveBeenCalledWith(
+            'user with this email exists'
+        )
+    })
+
+    it('reg new user with missing password', async () => {
+        User.findOne.mockResolvedValue(null)
+        await userController.registration(
+            { body: { email, password: '' } },
+            res,
+            next
+        )
+
+        expect(res.send).not.toHaveBeenCalled()
+        expect(ApiError.badRequest).toHaveBeenCalledWith(
+            'email or password is empty'
+        )
+    })
+
+    it('reg new user with missing email', async () => {
+        User.findOne.mockResolvedValue(null)
+        await userController.registration(
+            { body: { email, password: '' } },
+            res,
+            next
+        )
+
+        expect(res.send).not.toHaveBeenCalled()
+        expect(ApiError.badRequest).toHaveBeenCalledWith(
+            'email or password is empty'
+        )
     })
 })
 
-describe('/api/user/signin endpoint tests', () => {
-    afterAll(async () => {
-        await truncate()
+describe('type controller tests', () => {
+    beforeEach(() => {
+        jest.clearAllMocks()
     })
-    it('create user and login should return 200 status code', async () => {
-        const creds = {
-            email: 'test@test.com',
-            password: 'password',
-        }
-        await request(app).post('/api/user/signup').send(creds)
-        const res = await request(app).post('/api/user/signin').send(creds)
-        expect(res.statusCode).toEqual(200)
-        expect(res.body).toHaveProperty('token')
+
+    it('create type', async () => {
+        await typeController.create({ body: { name: 'something' } }, res, next)
+
+        expect(res.send).toHaveBeenCalled()
+        expect(ApiError.badRequest).not.toHaveBeenCalled()
     })
-    it('empty email property should return 400 status code', async () => {
-        const res = await request(app).post('/api/user/signin').send({
-            email: '',
-            password: 'password',
-        })
-        expect(res.statusCode).toEqual(400)
+
+    it('create type with empty name property of request body', async () => {
+        await typeController.create({ body: { name: '' } }, res, next)
+
+        expect(res.send).not.toHaveBeenCalled()
+        expect(ApiError.badRequest).toHaveBeenCalled()
     })
-    it('empty password property should return 400 status code', async () => {
-        const res = await request(app).post('/api/user/signin').send({
-            email: 'test@test.com',
-            password: '',
-        })
-        expect(res.statusCode).toEqual(400)
+
+    it('getAll types', async () => {
+        await typeController.getAll({}, res)
+
+        expect(Type.findAll).toHaveBeenCalled()
+        expect(res.send).toHaveBeenCalled()
+        expect(ApiError.badRequest).not.toHaveBeenCalled()
     })
 })
 
-describe('/api/type endpoint tests', () => {
-    afterAll(async () => {
-        await truncate()
+describe('device controller test', () => {
+    beforeEach(() => {
+        jest.clearAllMocks()
     })
-    it('user with role ADMIN can create type should return 200 status code', async () => {
-        const creds = {
-            email: 'test@test.com',
-            password: 'password',
-            role: 'ADMIN',
+
+    const payload = {
+        name: ' name',
+        price: 10,
+        brandId: 1,
+        typeId: 1,
+    }
+
+    const img = {
+        mv: jest.fn(),
+    }
+
+    it('create device', async () => {
+        await deviceController.create(
+            {
+                body: payload,
+                files: { img },
+            },
+            res,
+            next
+        )
+        expect(res.send).toHaveBeenCalled()
+        expect(ApiError.badRequest).not.toHaveBeenCalled()
+        expect(img.mv).toHaveBeenCalled()
+    })
+
+    it('getAll devices', async () => {
+        const body = {
+            brandId: 1,
+            typeId: 1,
+            limit: 1,
+            page: 1,
         }
-        const res = await request(app).post('/api/user/signup').send(creds)
-        const { token } = res.body
-        const typeRes = await request(app)
-            .post('/api/type')
-            .set('Authorization', 'Bearer ' + token)
-            .send({
-                name: 'phone',
-            })
 
-        expect(typeRes.statusCode).toEqual(200)
+        await deviceController.getAll({ body }, res, next)
+        expect(res.send).toHaveBeenCalled()
     })
-    it('get request to type endpoint should return status 200 and data type of array', async () => {
-        const res = await request(app).get('/api/type').send()
-        const { types } = res.body
 
-        expect(res.statusCode).toEqual(200)
-
-        expect(Array.isArray(types)).toBe(true)
-    })
-})
-describe('/api/brand endpoint tests', () => {
-    afterAll(async () => {
-        await truncate()
-    })
-    it('user with role ADMIN can create brand should return 200 status code', async () => {
-        const creds = {
-            email: 'test@test.com',
-            password: 'password',
-            role: 'ADMIN',
+    it('getOne devices', async () => {
+        const params = {
+            id: 1,
         }
-        const res = await request(app).post('/api/user/signup').send(creds)
-        const { token } = res.body
-        const brandRes = await request(app)
-            .post('/api/brand')
-            .set('Authorization', 'Bearer ' + token)
-            .send({
-                name: 'apple',
-            })
 
-        expect(brandRes.statusCode).toEqual(200)
-    })
-    it('get request to brand endpoint should return status 200 and data type of array', async () => {
-        const res = await request(app).get('/api/brand').send()
-        const { brands } = res.body
-
-        expect(res.statusCode).toEqual(200)
-        expect(Array.isArray(brands)).toBe(true)
+        await deviceController.getOne({ params }, res, next)
+        expect(Device.findOne).toHaveBeenCalled()
+        expect(res.send).toHaveBeenCalled()
+        expect(ApiError.badRequest).not.toHaveBeenCalled()
     })
 })
 
-describe('/api/device endpoint tests', () => {
-    afterAll(async () => {
-        await truncate()
-        // clearStatic()
+describe('brand conttoller tests', () => {
+    beforeEach(() => {
+        jest.clearAllMocks()
     })
 
-    const filePath = path.resolve(__dirname, '..', 'testFiles', 'test.jpg')
+    const body = {
+        name: 'something',
+    }
 
-    it('POST /api/device create Device entity and image upload', async () => {
-        const creds = {
-            email: 'test@test.com',
-            password: 'password',
-            role: 'ADMIN',
-        }
-        const res = await request(app).post('/api/user/signup').send(creds)
-        const { token } = res.body
+    it('create brand', async () => {
+        await brandController.create({ body }, res, next)
 
-        await request(app)
-            .post('/api/brand')
-            .set('Authorization', 'Bearer ' + token)
-            .send({
-                name: 'apple',
-            })
+        expect(res.send).toHaveBeenCalled()
+        expect(Brand.create).toHaveBeenCalled()
+        expect(ApiError.badRequest).not.toHaveBeenCalled()
+    })
 
-        await request(app)
-            .post('/api/type')
-            .set('Authorization', 'Bearer ' + token)
-            .send({
-                name: 'phone',
-            })
+    it('create brand without param', async () => {
+        await brandController.create({ body: { name: '' } }, res, next)
 
-        const brandRes = await request(app).get('/api/brand').send()
-        const { brands } = brandRes.body
-        const typeRes = await request(app).get('/api/type').send()
-        const { types } = typeRes.body
+        expect(res.send).not.toHaveBeenCalled()
+        expect(Brand.create).not.toHaveBeenCalled()
+        expect(ApiError.badRequest).toHaveBeenCalledWith('param name required')
+    })
 
-        const deviceRes = await request(app)
-            .post('/api/device')
-            .set('Authorization', 'Bearer ' + token)
-            .set('Content-Type', 'application/x-www-form-urlencoded')
-            .field('name', 'samsung')
-            .field('price', 100)
-            .field('brandId', brands[0].id)
-            .field('typeId', types[0].id)
-            .attach('img', filePath)
+    it('getAll brand', async () => {
+        await brandController.getAll({}, res, next)
 
-        expect(deviceRes.statusCode).toEqual(200)
+        expect(Brand.findAll).toHaveBeenCalled()
+        expect(res.send).toHaveBeenCalled()
     })
 })
